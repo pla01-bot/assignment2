@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="Seoul Arts Center.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="structure browser pragmas query" current="3"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="779"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="Exhibition" custom_title="0" dock_id="1" table="4,10:mainExhibition"/><dock_state state="000000ff00000000fd0000000100000002000003f700000340fc0100000001fb000000160064006f0063006b00420072006f00770073006500310100000000000003f70000015c00ffffff000003f70000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="Customer" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="31"/><column index="2" value="31"/><column index="3" value="43"/><column index="4" value="37"/><column index="5" value="37"/><column index="6" value="37"/><column index="7" value="43"/><column index="8" value="43"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table><table schema="main" name="Exhibition" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="300"/><column index="2" value="67"/><column index="3" value="67"/><column index="4" value="71"/><column index="5" value="180"/><column index="6" value="31"/><column index="7" value="300"/><column index="8" value="300"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1">SELECT 
+    (나이 / 10) * 10 || '대' AS 연령대,
+    성별,
+    SUM(무료 + 기타) AS 무료_잠재고객,
+    SUM(골드 + 블루 + 그린) AS 유료_충성고객
+FROM Customer
+GROUP BY 연령대, 성별;
+
+-- 장르별 분석 (Exhibition 테이블과 JOIN)
+SELECT 
+    E.장르, 
+    COUNT(*) AS 예매건수  -- W.id 대신 COUNT(*)을 사용합니다.
+FROM Wheelchair W
+JOIN Exhibition E ON W.공연명 = E.제목
+GROUP BY E.장르
+ORDER BY 예매건수 DESC;
+
+-- 공연장별 분석
+SELECT 공간명, COUNT(*) AS 예매건수
+FROM Wheelchair
+GROUP BY 공간명
+ORDER BY 예매건수 DESC;</sql><current_tab id="0"/></tab_sql></sqlb_project>
