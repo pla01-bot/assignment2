@@ -24,7 +24,6 @@ if not os.path.exists(db_path):
 # DB 연결 및 데이터 불러오기 함수 (캐싱을 통해 속도 향상)
 @st.cache_data
 def load_data(query):
-    # sqlite3 연결 (기본적으로 UTF-8 인코딩을 지원하여 한글 깨짐 방지)
     conn = sqlite3.connect(db_path)
     df = pd.read_sql(query, conn)
     conn.close()
@@ -35,9 +34,11 @@ def load_data(query):
 # ---------------------------------------------------------
 st.subheader("1. 연령 및 성별 멤버십 분포")
 
+# [수정됨] 10대 미만 데이터 분류 및 분석에서 제외(필터링)하는 로직 추가
 query1 = """
 SELECT 
     CASE 
+        WHEN CAST(나이 AS INTEGER) < 10 THEN '10대 미만'
         WHEN CAST(나이 AS INTEGER) BETWEEN 10 AND 19 THEN '10대'
         WHEN CAST(나이 AS INTEGER) BETWEEN 20 AND 29 THEN '20대'
         WHEN CAST(나이 AS INTEGER) BETWEEN 30 AND 39 THEN '30대'
@@ -49,23 +50,25 @@ SELECT
     SUM(골드 + 블루 + 그린) AS 유료멤버십,
     SUM(무료) AS 무료멤버십
 FROM Customer
+WHERE CAST(나이 AS INTEGER) >= 10  -- 10대 미만 데이터가 분석에 불필요하므로 제외
 GROUP BY 연령대, 성별
 ORDER BY 연령대, 성별
 """
 df1 = load_data(query1)
 
-# Plotly에서 누적 막대를 예쁘게 그리기 위해 데이터를 변환(Melt)합니다.
-df1_melt = df1.melt(id_vars=['연령대', '성별'], 
-                    value_vars=['유료멤버십', '무료멤버십'], 
-                    var_name='멤버십유형', 
-                    value_name='회원수')
-# X축에 연령과 성별을 함께 보여주기 위해 컬럼 결합
-df1_melt['연령_성별'] = df1_melt['연령대'] + " (" + df1_melt['성별'] + ")"
+if not df1.empty:
+    df1_melt = df1.melt(id_vars=['연령대', '성별'], 
+                        value_vars=['유료멤버십', '무료멤버십'], 
+                        var_name='멤버십유형', 
+                        value_name='회원수')
+    df1_melt['연령_성별'] = df1_melt['연령대'] + " (" + df1_melt['성별'] + ")"
 
-fig1 = px.bar(df1_melt, x='연령_성별', y='회원수', color='멤버십유형', barmode='stack', 
-              title="연령/성별 유료 및 무료 멤버십 가입자 수",
-              labels={'연령_성별': '연령대 및 성별', '회원수': '가입자 수 (명)'})
-st.plotly_chart(fig1, use_container_width=True)
+    fig1 = px.bar(df1_melt, x='연령_성별', y='회원수', color='멤버십유형', barmode='stack', 
+                  title="연령/성별 유료 및 무료 멤버십 가입자 수 (10대 이상)",
+                  labels={'연령_성별': '연령대 및 성별', '회원수': '가입자 수 (명)'})
+    st.plotly_chart(fig1, use_container_width=True)
+else:
+    st.warning("⚠️ 표시할 멤버십 데이터가 없습니다.")
 
 with st.expander("💡 사용된 SQL 쿼리 및 비즈니스 인사이트 보기"):
     st.code(query1, language='sql')
@@ -82,21 +85,26 @@ st.divider()
 # ---------------------------------------------------------
 st.subheader("2. 장르별 휠체어석 예매 현황")
 
+# [수정됨] REPLACE 함수를 사용하여 띄어쓰기(공백)를 제거한 뒤 조인하여 매칭 확률 향상
 query2 = """
 SELECT 
     E.장르, 
     COUNT(*) AS 예매건수
 FROM Wheelchair W
-JOIN Exhibition E ON W.공연명 = E.제목
+JOIN Exhibition E ON REPLACE(W.공연명, ' ', '') = REPLACE(E.제목, ' ', '')
 GROUP BY E.장르
 ORDER BY 예매건수 DESC
 """
 df2 = load_data(query2)
 
-fig2 = px.pie(df2, names='장르', values='예매건수', 
-              title="장르별 휠체어석 예매 비율",
-              hole=0.3) # 도넛 형태로 살짝 세련되게 표현
-st.plotly_chart(fig2, use_container_width=True)
+# [수정됨] 데이터가 비어있을 경우 에러가 나지 않도록 예외 처리 추가
+if df2.empty:
+    st.warning("⚠️ Wheelchair와 Exhibition 테이블 간에 이름이 정확히 일치하는 공연이 없어 데이터를 연결하지 못했습니다.")
+else:
+    fig2 = px.pie(df2, names='장르', values='예매건수', 
+                  title="장르별 휠체어석 예매 비율",
+                  hole=0.3)
+    st.plotly_chart(fig2, use_container_width=True)
 
 with st.expander("💡 사용된 SQL 쿼리 및 비즈니스 인사이트 보기"):
     st.code(query2, language='sql')
@@ -124,11 +132,14 @@ LIMIT 10
 """
 df3 = load_data(query3)
 
-fig3 = px.bar(df3, x='예매건수', y='공간명', orientation='h', 
-              title="휠체어석 예매가 가장 많은 공연장 TOP 10",
-              labels={'예매건수': '총 예매 건수', '공간명': '공연장명'})
-fig3.update_layout(yaxis={'categoryorder':'total ascending'}) # 예매건수 많은 순으로 위로 정렬
-st.plotly_chart(fig3, use_container_width=True)
+if not df3.empty:
+    fig3 = px.bar(df3, x='예매건수', y='공간명', orientation='h', 
+                  title="휠체어석 예매가 가장 많은 공연장 TOP 10",
+                  labels={'예매건수': '총 예매 건수', '공간명': '공연장명'})
+    fig3.update_layout(yaxis={'categoryorder':'total ascending'}) 
+    st.plotly_chart(fig3, use_container_width=True)
+else:
+    st.warning("⚠️ 표시할 공연장 데이터가 없습니다.")
 
 with st.expander("💡 사용된 SQL 쿼리 및 비즈니스 인사이트 보기"):
     st.code(query3, language='sql')
