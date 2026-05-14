@@ -8,8 +8,9 @@ import plotly.express as px
 st.set_page_config(page_title="예술의전당 운영 전략 대시보드", layout="wide")
 st.title("🏛️ 예술의전당 데이터 기반 운영 전략 대시보드")
 
-# 2. 데이터베이스 연결 함수 (에러 메시지 출력 강화)
-db_path = 'assignment2.db'
+# 2. 데이터베이스 파일 이름 변경
+# 사용자님의 실제 DB 파일 이름인 'Seoul Arts Center.db'로 설정합니다.
+db_path = 'Seoul Arts Center.db'
 
 def load_data(query):
     try:
@@ -18,21 +19,26 @@ def load_data(query):
         conn.close()
         return df
     except Exception as e:
-        # 에러가 나면 화면에 어떤 이름이 잘못되었는지 바로 표시합니다.
         st.error(f"❌ 데이터 불러오기 실패! (원인: {e})")
-        st.info("💡 팁: 'Customer'나 '나이' 같은 이름이 DB와 일치하는지 확인해주세요.")
+        st.info(f"💡 팁: '{db_path}' 파일이 깃허브에 정상적으로 업로드되었는지 확인해주세요.")
         st.stop()
 
+# 파일 존재 여부 확인
 if not os.path.exists(db_path):
-    st.error(f"🚨 '{db_path}' 파일을 찾을 수 없습니다! 깃허브에 파일이 있는지 확인해주세요.")
+    st.error(f"🚨 '{db_path}' 파일을 찾을 수 없습니다!")
+    st.markdown(f"""
+    **✅ 해결 방법:**
+    1. 내 컴퓨터에 있는 **{db_path}** 파일을 찾습니다.
+    2. 깃허브 저장소에 이 파일을 업로드합니다.
+    3. 파일 이름의 대소문자와 띄어쓰기가 정확한지 확인하세요.
+    """)
     st.stop()
 
 # ---------------------------------------------------------
-# [분석 1] 멤버십 분포 (보내주신 상세 데이터 반영)
+# [분석 1] 멤버십 분포 (나이/성별/멤버십)
 # ---------------------------------------------------------
 st.header("1. 고객 세그먼트 분석: 멤버십 분포")
 
-# 컬럼명에 쌍따옴표(")를 붙여 한글 깨짐이나 공백 에러를 방지합니다.
 query1 = """
 SELECT 
     CASE 
@@ -56,34 +62,37 @@ fig1 = px.bar(df1_melted, x='연령대', y='회원수', color='유형', barmode=
               title="연령/성별 멤버십 가입 현황")
 st.plotly_chart(fig1, use_container_width=True)
 
-st.info("**💡 핵심 인사이트:** 20대 여성 무료 회원이 **11,200명**으로 가장 많으며, 이들을 유료로 전환하는 것이 핵심 과제입니다.")
-
 # ---------------------------------------------------------
-# [분석 2] 장르별 예매 현황 (보내주신 결과 반영)
+# [분석 2] 장르별 예매 현황 (JOIN 쿼리 수정)
 # ---------------------------------------------------------
 st.header("2. 콘텐츠 분석: 장르별 수요")
 
-# 장르별 분석 결과 데이터를 직접 리스트로 만들어 차트를 그립니다 (DB 에러 방지용)
-# 만약 DB에서 직접 가져오고 싶다면 아래 주석을 해제하세요.
-genre_data = {
-    '장르': ['클래식', '독주', '실내악', '교향곡', '기타', '성악', '뮤지컬', '이벤트콘서트', '연극', '합창', '발레', '오페라'],
-    '예매건수': [1539, 1172, 321, 289, 166, 73, 36, 30, 30, 18, 17, 6]
-}
-df2 = pd.DataFrame(genre_data)
+# 프로젝트 파일에 적힌 대로 E.공연명 대신 E.제목을 사용하여 JOIN 합니다.
+query2 = """
+SELECT E."장르", COUNT(*) AS 예매건수
+FROM Wheelchair W
+JOIN Exhibition E ON W."공연명" = E."제목"
+GROUP BY E."장르"
+ORDER BY 예매건수 DESC
+"""
+df2 = load_data(query2)
 
 fig2 = px.pie(df2, names='장르', values='예매건수', title="장르별 수요 비중", hole=0.4)
 st.plotly_chart(fig2, use_container_width=True)
 
 # ---------------------------------------------------------
-# [분석 3] 공연장별 이용 현황 (보내주신 결과 반영)
+# [분석 3] 공연장별 이용 현황
 # ---------------------------------------------------------
 st.header("3. 시설 분석: 공연장별 이용 현황")
 
-venue_data = {
-    '공간명': ['콘서트홀', '오페라극장', 'IBK챔버홀', '리사이틀홀', '기업은행챔버홀', 'CJ 토월극장', '인춘아트홀', '자유소극장'],
-    '예매건수': [1866, 617, 560, 336, 329, 325, 160, 128]
-}
-df3 = pd.DataFrame(venue_data)
+query3 = """
+SELECT "공간명", COUNT(*) AS 예매건수
+FROM Wheelchair
+GROUP BY "공간명"
+ORDER BY 예매건수 DESC
+LIMIT 8
+"""
+df3 = load_data(query3)
 
 fig3 = px.bar(df3, x='예매건수', y='공간명', orientation='h', title="주요 공연장 이용 TOP 8", color='예매건수')
 fig3.update_layout(yaxis={'categoryorder':'total ascending'})
